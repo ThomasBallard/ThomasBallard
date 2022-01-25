@@ -1,0 +1,57 @@
+#The purpose of this project is to compile season-by-season statistics for goaltenders who have appeared on the roster of a regular season National Hockey League game.
+#The NHL makes many statistics readily available through their website or through their API (see https://github.com/dword4/nhlapi). Appearances on game rosters are not one of those statistics.
+#Backup goaltenders frequently spend the entire game on the bench, not playing a single minute. The only evidence that these goalies were even on the game roster
+#comes in the form of Event Summaries, HTML documents published on the NHL website, which are hard to access and can normally only be read on a case-by-case basis.
+#Roster appearances can be used to determine if a given goaltender doesn't play in games because they aren't available to play (in which case they won't appear on the roster)
+#or they don't play because they are on the bench. If the former is true, it may indicate that they are injury-prone. Useful information for a coach or manager.
+
+import numpy as np
+import random
+from bs4 import BeautifulSoup
+from time import sleep
+from selenium import webdriver
+from webdriver_manager.chrome import ChromeDriverManager
+import pandas as pd
+#THIS FILE TAKES ABOUT 3 HOURS TO COMPLETE (ABOUT 10 MINUTES PER SEASON)
+#IT SCRAPES EVENT SUMMARY REPORTS FOR EVERY SEASON SINCE 1999-00 AND EXTRACTS GOALIE STATS
+pages = np.arange(1, 1272)
+driver = webdriver.Chrome(ChromeDriverManager().install())
+#The cached version of Chromedriver will be used if it is the correct version.
+#DO NOT MOVE THE DRIVER FROM THE DRIVER CACHE
+years = np.arange(1999, 2021)
+for year in years:
+    data = []
+    for page in pages:
+        if page < 10:
+            page = "http://www.nhl.com/scores/htmlreports/" + str(year) + str(year + 1) + "/ES02000" + str(page) + ".HTM"
+        elif page >= 10 and page < 100:
+            page = "http://www.nhl.com/scores/htmlreports/" + str(year) + str(year + 1) + "/ES0200" + str(page) + ".HTM"
+        elif page >= 100 and page < 1000:
+            page = "http://www.nhl.com/scores/htmlreports/" + str(year) + str(year + 1) + "/ES020" + str(page) + ".HTM"
+        elif page >= 1000:
+            page = "http://www.nhl.com/scores/htmlreports/" + str(year) + str(year + 1) + "/ES02" + str(page) + ".HTM"
+        driver.get(page)
+    
+        soup = BeautifulSoup(driver.page_source, 'html.parser')
+        my_table = soup.find()
+        data.append(my_table.get_text())
+    newdata = []
+    newdata.append(data)
+    newdata = str(newdata).split('\\n')
+    Goalie_ind = []
+    count = 1
+    #count is purposefully one higher than index
+    for item in newdata:
+        if item == 'G':
+            Goalie_ind.append(count)
+        count += 1
+    Goalie_list = []
+    for goalieIndex in Goalie_ind:
+        Goalie_list.append(newdata[goalieIndex].upper())
+    #several lists are cleared, data must be run thru from step 4 (newdata declared) if vars are changed.
+    newdata.clear()
+    mydict = {i:Goalie_list.count(i) for i in Goalie_list}
+    df = pd.DataFrame([[key, value] for key, value in mydict.items()], columns=['Name', 'Games'])
+    df.to_excel('goalies' + str(year) + '.xlsx')
+    data.clear()
+    #data.clear() is needed to prevent the sheet from stacking all collected data on every sheet, shorten runtime.
